@@ -88,3 +88,13 @@ It is possible to merge multiple .ply files together and output a single, combin
 The Data Panel can be used to analyze the contents of your splat scenes. Initially, it is collapsed at the bottom of the application's window. To open it, click on the panel's header or press the 'D' key.
 
 The Data Panel plots various scene properties on a histogram display. You can select splats directly by dragging on the histogram view. Use the Shift key to add to the current selection and the Ctrl key to remove from the current selection.
+
+## Additional Documentation
+
+For deeper learning materials (Chinese), see the following documents in this folder:
+
+- **《SuperSplat 文档学习指南》** (`docs/学习指南.md`): Recommended reading order and study tips for the documentation set.
+- **《PlayCanvas 核心概念与 API 文档》**: Core concepts and APIs used by SuperSplat.
+- **《PlayCanvas 渲染系统底层封装实现文档》**: Rendering pipeline encapsulation details.
+- **《PlayCanvas 多视角摄像机系统完整指南》**: Multi-camera workflows and configuration guidance.
+- **《选择工具渲染逻辑文档》**: Selection tool rendering logic and extension notes.

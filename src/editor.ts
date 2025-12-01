@@ -540,6 +540,8 @@ const registerEditorEvents = (events: Events, editHistory: EditHistory, scene: S
     const setCameraOverlay = (enabled: boolean) => {
         if (enabled !== cameraOverlay) {
             cameraOverlay = enabled;
+            scene.camera.renderOverlays = cameraOverlay;
+            scene.forceRender = true;
             events.fire('camera.overlay', cameraOverlay);
         }
     };
@@ -555,6 +557,10 @@ const registerEditorEvents = (events: Events, editHistory: EditHistory, scene: S
     events.on('camera.toggleOverlay', () => {
         setCameraOverlay(!events.invoke('camera.overlay'));
     });
+
+    // initialize overlay visibility
+    scene.camera.renderOverlays = cameraOverlay;
+    events.fire('camera.overlay', cameraOverlay);
 
     // splat size
 
