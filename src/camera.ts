@@ -841,7 +841,7 @@ class Camera extends Element {
         this.suppressFinalBlit = false;
     }
 
-    async renderPreview(target: HTMLCanvasElement, options: {
+    async renderPreview(target: HTMLCanvasElement, options?: {
         azim: number;
         elev: number;
         focalPoint: Vec3;
@@ -849,7 +849,7 @@ class Camera extends Element {
         ortho?: boolean;
         renderOverlays?: boolean;
     }): Promise<boolean> {
-        if (!target) {
+        if (!target || !options) {
             return false;
         }
 
