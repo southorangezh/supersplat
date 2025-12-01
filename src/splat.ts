@@ -236,6 +236,11 @@ class Splat extends Element {
 
         this.scene.forceRender = true;
         this.scene.events.fire('splat.stateChanged', this);
+
+        const events = this.scene.events;
+        if (events.invoke('selection') === this) {
+            events.fire('selection.changed', this, this);
+        }
     }
 
     updatePositions() {

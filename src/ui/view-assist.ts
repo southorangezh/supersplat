@@ -110,6 +110,8 @@ class ViewAssist extends Container {
         this.append(content);
         this.append(placeholder);
 
+        let refreshRequested = false;
+
         const refresh = async () => {
             this.refreshToken++;
             const token = this.refreshToken;
@@ -162,7 +164,24 @@ class ViewAssist extends Container {
             refresh();
         };
 
+        const scheduleRefresh = () => {
+            if (refreshRequested) {
+                return;
+            }
+
+            refreshRequested = true;
+            requestAnimationFrame(() => {
+                refreshRequested = false;
+                refresh();
+            });
+        };
+
         events.on('selection.changed', updateSelection);
+        events.on('splat.stateChanged', (splat: Splat) => {
+            if (splat && splat === this.selection) {
+                scheduleRefresh();
+            }
+        });
         events.on('camera.focus', refresh);
         events.on('edit.add', refresh);
         events.on('edit.undo', refresh);
