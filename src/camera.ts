@@ -528,18 +528,18 @@ class Camera extends Element {
         }
     }
 
-    private setPreviewClippingPlanes(camera: any, cameraPosition: Vec3, forwardVec: Vec3, radius: number) {
-        // clamp to a small positive radius to avoid clipping everything away
-        const targetRadius = Math.max(radius ?? 0, 1e-6);
+    private setPreviewClippingPlanes(camera: any, cameraPosition: Vec3, forwardVec: Vec3) {
+        const bound = this.scene.bound;
+        const boundRadius = bound.halfExtents.length();
 
-        vec.sub2(this.scene.bound.center, cameraPosition);
+        vec.sub2(bound.center, cameraPosition);
         const dist = vec.dot(forwardVec);
 
         if (dist > 0) {
-            camera.farClip = dist + targetRadius;
-            camera.nearClip = Math.max(1e-6, dist - targetRadius);
+            camera.farClip = dist + boundRadius;
+            camera.nearClip = Math.max(1e-6, dist < boundRadius ? camera.farClip / (1024 * 16) : dist - boundRadius);
         } else {
-            camera.farClip = targetRadius * 2;
+            camera.farClip = boundRadius * 2;
             camera.nearClip = camera.farClip / (1024 * 16);
         }
     }
@@ -848,7 +848,6 @@ class Camera extends Element {
         radius: number;
         ortho?: boolean;
         renderOverlays?: boolean;
-        cameraId?: string;
     }): Promise<boolean> {
         if (!target) {
             return false;
@@ -882,6 +881,8 @@ class Camera extends Element {
         });
 
         try {
+            this.previewing = true;
+            this.startOffscreenMode(width, height);
             this.renderOverlays = options.renderOverlays ?? this.renderOverlays;
             this.scene.gizmoLayer.enabled = false;
 
@@ -900,7 +901,7 @@ class Camera extends Element {
             vec.copy(forwardVec).mulScalar(distance).add(options.focalPoint);
             previewCamera.entity.setLocalPosition(vec);
             previewCamera.entity.setLocalEulerAngles(options.elev, options.azim, 0);
-            this.setPreviewClippingPlanes(camera, previewCamera.entity.getLocalPosition(), previewCamera.entity.forward, options.radius);
+            this.setPreviewClippingPlanes(camera, previewCamera.entity.getLocalPosition(), previewCamera.entity.forward);
 
             camera.orthoHeight = options.ortho
                 ? options.radius / this.fovFactor * (camera.horizontalFov ? height / width : 1)
@@ -937,6 +938,8 @@ class Camera extends Element {
             this.renderOverlays = restore.renderOverlays;
             this.scene.gizmoLayer.enabled = restore.gizmoEnabled;
             previewCamera.entity.enabled = restore.enabled;
+
+            this.previewing = false;
 
             this.scene.forceRender = true;
         }

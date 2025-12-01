@@ -87,12 +87,9 @@ class ViewAssist extends Container {
 
                 const factor = Math.exp(-event.deltaY * 0.002);
                 const current = this.zoom.get(id) ?? 1;
-                const next = current * factor;
-                const clamped = (id === 'top' || id === 'side')
-                    ? Math.max(next, 1e-6)
-                    : Math.min(Math.max(next, 0.1), 10);
-                this.zoom.set(id, clamped);
-                scheduleRefresh();
+                const next = Math.min(Math.max(current * factor, 0.1), 10);
+                this.zoom.set(id, next);
+                refresh();
             });
 
             const viewLabel = new Label({
@@ -156,8 +153,7 @@ class ViewAssist extends Container {
                     focalPoint: vec,
                     radius: baseRadius * (this.zoom.get(view.id) ?? 1),
                     ortho: true,
-                    renderOverlays: scene.camera.renderOverlays,
-                    cameraId: view.id
+                    renderOverlays: scene.camera.renderOverlays
                 });
             }
         };
