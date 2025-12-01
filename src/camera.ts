@@ -848,7 +848,6 @@ class Camera extends Element {
         radius: number;
         ortho?: boolean;
         renderOverlays?: boolean;
-        cameraId?: string;
     }): Promise<boolean> {
         if (!target) {
             return false;
@@ -882,6 +881,8 @@ class Camera extends Element {
         });
 
         try {
+            this.previewing = true;
+            this.startOffscreenMode(width, height);
             this.renderOverlays = options.renderOverlays ?? this.renderOverlays;
             this.scene.gizmoLayer.enabled = false;
 
@@ -938,6 +939,14 @@ class Camera extends Element {
             this.scene.gizmoLayer.enabled = restore.gizmoEnabled;
             previewCamera.entity.enabled = restore.enabled;
 
+            this.previewing = false;
+
+            camera.projection = restore.projection;
+            camera.orthoHeight = restore.orthoHeight;
+            this.entity.setLocalPosition(restore.position);
+            this.entity.setLocalEulerAngles(restore.rotation);
+
+            this.endOffscreenMode();
             this.scene.forceRender = true;
         }
     }
