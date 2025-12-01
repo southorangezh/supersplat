@@ -29,6 +29,7 @@ import { ToolManager } from './tools/tool-manager';
 import { registerTransformHandlerEvents } from './transform-handler';
 import { EditorUI } from './ui/editor';
 import { localizeInit } from './ui/localization';
+import { ViewAssist } from './ui/view-assist';
 
 declare global {
     interface LaunchParams {
@@ -142,6 +143,9 @@ const main = async () => {
         editorUI.canvas,
         graphicsDevice
     );
+
+    const viewAssist = new ViewAssist(events, scene, editorUI.tooltips);
+    editorUI.canvasContainer.append(viewAssist);
 
     // colors
     const bgClr = new Color();
