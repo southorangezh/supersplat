@@ -110,8 +110,7 @@ class SplatOverlay extends Element {
         if (this.meshInstance.node &&
             this.scene.camera.renderOverlays &&
             splatSize > 0 &&
-            events.invoke('camera.overlay') &&
-            events.invoke('camera.mode') === 'centers') {
+            events.invoke('camera.overlay')) {
             const selectedClr = events.invoke('selectedClr');
             const unselectedClr = events.invoke('unselectedClr');
             const { material } = this.meshInstance;

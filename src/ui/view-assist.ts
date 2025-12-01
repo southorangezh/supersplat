@@ -28,6 +28,8 @@ class ViewAssist extends Container {
 
     private selection: Splat | null = null;
 
+    private zoom: Map<string, number> = new Map();
+
     private refreshToken = 0;
 
     constructor(events: Events, scene: Scene, tooltips: Tooltips, args = {}) {
@@ -77,6 +79,19 @@ class ViewAssist extends Container {
 
             this.canvases.set(id, canvas);
 
+            this.zoom.set(id, 1);
+
+            canvas.addEventListener('wheel', (event: WheelEvent) => {
+                event.preventDefault();
+                event.stopPropagation();
+
+                const factor = Math.exp(-event.deltaY * 0.002);
+                const current = this.zoom.get(id) ?? 1;
+                const next = Math.min(Math.max(current * factor, 0.1), 10);
+                this.zoom.set(id, next);
+                refresh();
+            });
+
             const viewLabel = new Label({
                 class: 'view-assist-label',
                 text: localize(label)
@@ -118,7 +133,7 @@ class ViewAssist extends Container {
             const worldTransform = this.selection.worldTransform;
             worldTransform.transformPoint(vec, vec);
             worldTransform.getScale(scale);
-            const radius = bound.halfExtents.length() * scale.x;
+            const baseRadius = bound.halfExtents.length() * scale.x;
 
             for (const view of this.views) {
                 if (token !== this.refreshToken) {
@@ -134,14 +149,16 @@ class ViewAssist extends Container {
                     azim: view.azim,
                     elev: view.elev,
                     focalPoint: vec,
-                    radius,
-                    ortho: true
+                    radius: baseRadius * (this.zoom.get(view.id) ?? 1),
+                    ortho: true,
+                    renderOverlays: scene.camera.renderOverlays
                 });
             }
         };
 
         const updateSelection = (selection: Splat) => {
             this.selection = selection;
+            this.views.forEach(({ id }) => this.zoom.set(id, 1));
             refresh();
         };
 
@@ -151,6 +168,8 @@ class ViewAssist extends Container {
         events.on('edit.undo', refresh);
         events.on('edit.redo', refresh);
         events.on('scene.boundChanged', refresh);
+        events.on('camera.overlay', refresh);
+        events.on('camera.mode', refresh);
 
         tooltips.register(this, localize('panel.view-assist.tooltip'));
 
