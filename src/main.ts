@@ -226,7 +226,9 @@ const main = async () => {
     const maskCanvas = document.createElement('canvas');
     const maskContext = maskCanvas.getContext('2d');
     maskCanvas.setAttribute('id', 'mask-canvas');
-    maskContext.globalCompositeOperation = 'copy';
+    // Use normal draw mode so repeated strokes accumulate on the shared mask canvas
+    // instead of erasing previous marks.
+    maskContext.globalCompositeOperation = 'source-over';
 
     const mask = {
         canvas: maskCanvas,
