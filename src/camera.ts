@@ -66,6 +66,7 @@ class Camera extends Element {
     focalPointTween = new TweenValue({ x: 0, y: 0.5, z: 0 });
     azimElevTween = new TweenValue({ azim: 30, elev: -15 });
     distanceTween = new TweenValue({ distance: 1 });
+    private previewing = false;
 
     minElev = -90;
     maxElev = 90;
@@ -457,6 +458,10 @@ class Camera extends Element {
     }
 
     onUpdate(deltaTime: number) {
+        if (this.previewing) {
+            return;
+        }
+
         // controller update
         this.controller.update(deltaTime);
 
@@ -729,6 +734,7 @@ class Camera extends Element {
         focalPoint: Vec3;
         radius: number;
         ortho?: boolean;
+        renderOverlays?: boolean;
     }): Promise<boolean> {
         if (!target) {
             return false;
@@ -766,8 +772,9 @@ class Camera extends Element {
         });
 
         try {
+            this.previewing = true;
             this.startOffscreenMode(width, height);
-            this.renderOverlays = false;
+            this.renderOverlays = options.renderOverlays ?? this.renderOverlays;
             this.scene.gizmoLayer.enabled = false;
 
             camera.projection = options.ortho ? PROJECTION_ORTHOGRAPHIC : PROJECTION_PERSPECTIVE;
@@ -816,6 +823,8 @@ class Camera extends Element {
             this.suppressFinalBlit = restore.suppressFinalBlit;
             this.renderOverlays = restore.renderOverlays;
             this.scene.gizmoLayer.enabled = restore.gizmoEnabled;
+
+            this.previewing = false;
 
             camera.projection = restore.projection;
             camera.orthoHeight = restore.orthoHeight;
