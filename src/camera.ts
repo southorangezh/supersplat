@@ -54,6 +54,8 @@ const vecb = new Vec3();
 const va = new Vec3();
 const m = new Mat4();
 const v4 = new Vec4();
+const previewPos = new Vec3();
+const previewRot = new Vec3();
 
 // modulo dealing with negative numbers
 const mod = (n: number, m: number) => ((n % m) + m) % m;
@@ -719,6 +721,110 @@ class Camera extends Element {
     endOffscreenMode() {
         this.targetSize = null;
         this.suppressFinalBlit = false;
+    }
+
+    async renderPreview(target: HTMLCanvasElement, options: {
+        azim: number;
+        elev: number;
+        focalPoint: Vec3;
+        radius: number;
+        ortho?: boolean;
+    }): Promise<boolean> {
+        if (!target) {
+            return false;
+        }
+
+        const dpr = window.devicePixelRatio || 1;
+        const width = Math.max(1, Math.floor((target.clientWidth || target.width) * dpr));
+        const height = Math.max(1, Math.floor((target.clientHeight || target.height) * dpr));
+
+        if (!width || !height) {
+            return false;
+        }
+
+        target.width = width;
+        target.height = height;
+
+        const { camera } = this.entity;
+
+        const restore = {
+            targetSize: this.targetSize,
+            suppressFinalBlit: this.suppressFinalBlit,
+            renderOverlays: this.renderOverlays,
+            gizmoEnabled: this.scene.gizmoLayer.enabled,
+            projection: camera.projection,
+            orthoHeight: camera.orthoHeight,
+            position: previewPos.copy(this.entity.getLocalPosition()),
+            rotation: previewRot.copy(this.entity.getLocalEulerAngles())
+        };
+
+        const renderComplete = new Promise<void>((resolve) => {
+            const handle = this.scene.events.on('postrender', () => {
+                handle.off();
+                resolve();
+            });
+        });
+
+        try {
+            this.startOffscreenMode(width, height);
+            this.renderOverlays = false;
+            this.scene.gizmoLayer.enabled = false;
+
+            camera.projection = options.ortho ? PROJECTION_ORTHOGRAPHIC : PROJECTION_PERSPECTIVE;
+
+            // place the camera using a preview-only transform so the main view remains untouched
+            calcForwardVec(forwardVec, options.azim, options.elev);
+            const distance = Math.max(options.radius / this.sceneRadius, 1e-6) * this.sceneRadius / this.fovFactor;
+            vec.copy(forwardVec).mulScalar(distance).add(options.focalPoint);
+            this.entity.setLocalPosition(vec);
+            this.entity.setLocalEulerAngles(options.elev, options.azim, 0);
+            this.fitClippingPlanes(this.entity.getLocalPosition(), this.entity.forward);
+
+            camera.orthoHeight = options.ortho
+                ? options.radius / this.fovFactor * (camera.horizontalFov ? height / width : 1)
+                : camera.orthoHeight;
+
+            this.scene.forceRender = true;
+
+            await renderComplete;
+
+            const data = new Uint8Array(width * height * 4);
+
+            const { renderTarget } = camera;
+            const { workRenderTarget } = this;
+
+            this.scene.dataProcessor.copyRt(renderTarget, workRenderTarget);
+            await workRenderTarget.colorBuffer.read(0, 0, width, height, { renderTarget: workRenderTarget, data });
+
+            // flip the image vertically to match canvas coordinates
+            let line = new Uint8Array(width * 4);
+            for (let y = 0; y < height / 2; y++) {
+                line = data.slice(y * width * 4, (y + 1) * width * 4);
+                data.copyWithin(y * width * 4, (height - y - 1) * width * 4, (height - y) * width * 4);
+                data.set(line, (height - y - 1) * width * 4);
+            }
+
+            const context = target.getContext('2d');
+            if (context) {
+                const pixels = new ImageData(new Uint8ClampedArray(data.buffer), width, height);
+                context.putImageData(pixels, 0, 0);
+            }
+
+            return true;
+        } finally {
+            this.targetSize = restore.targetSize;
+            this.suppressFinalBlit = restore.suppressFinalBlit;
+            this.renderOverlays = restore.renderOverlays;
+            this.scene.gizmoLayer.enabled = restore.gizmoEnabled;
+
+            camera.projection = restore.projection;
+            camera.orthoHeight = restore.orthoHeight;
+            this.entity.setLocalPosition(restore.position);
+            this.entity.setLocalEulerAngles(restore.rotation);
+
+            this.endOffscreenMode();
+            this.scene.forceRender = true;
+        }
     }
 }
 

@@ -1,0 +1,43 @@
+@use 'colors.scss' as *;
+
+#view-assist {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    width: 660px;
+    max-width: calc(100% - 24px);
+    pointer-events: auto;
+}
+
+#view-assist-content {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.view-assist-view {
+    position: relative;
+    background-color: $bcg-darker;
+    border: 1px solid $bcg-dark;
+}
+
+.view-assist-canvas {
+    width: 100%;
+    height: 140px;
+    display: block;
+    background-color: black;
+}
+
+.view-assist-label {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    color: $text-primary;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+#view-assist-placeholder {
+    padding: 12px;
+    text-align: center;
+    color: $text-secondary;
+}

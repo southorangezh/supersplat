@@ -39,6 +39,7 @@ class EditorUI {
     toolsContainer: Container;
     canvas: HTMLCanvasElement;
     popup: Popup;
+    tooltips: Tooltips;
 
     constructor(events: Events) {
         // favicon
@@ -196,6 +197,7 @@ class EditorUI {
         this.toolsContainer = toolsContainer;
         this.canvas = canvas;
         this.popup = popup;
+        this.tooltips = tooltips;
 
         document.body.appendChild(appContainer.dom);
         document.body.setAttribute('tabIndex', '-1');
