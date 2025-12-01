@@ -734,6 +734,7 @@ class Camera extends Element {
         focalPoint: Vec3;
         radius: number;
         ortho?: boolean;
+        renderOverlays?: boolean;
     }): Promise<boolean> {
         if (!target) {
             return false;
@@ -773,7 +774,7 @@ class Camera extends Element {
         try {
             this.previewing = true;
             this.startOffscreenMode(width, height);
-            this.renderOverlays = false;
+            this.renderOverlays = options.renderOverlays ?? this.renderOverlays;
             this.scene.gizmoLayer.enabled = false;
 
             camera.projection = options.ortho ? PROJECTION_ORTHOGRAPHIC : PROJECTION_PERSPECTIVE;
