@@ -941,12 +941,6 @@ class Camera extends Element {
 
             this.previewing = false;
 
-            camera.projection = restore.projection;
-            camera.orthoHeight = restore.orthoHeight;
-            this.entity.setLocalPosition(restore.position);
-            this.entity.setLocalEulerAngles(restore.rotation);
-
-            this.endOffscreenMode();
             this.scene.forceRender = true;
         }
     }
