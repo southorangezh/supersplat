@@ -66,6 +66,7 @@ class Camera extends Element {
     focalPointTween = new TweenValue({ x: 0, y: 0.5, z: 0 });
     azimElevTween = new TweenValue({ azim: 30, elev: -15 });
     distanceTween = new TweenValue({ distance: 1 });
+    private previewing = false;
 
     minElev = -90;
     maxElev = 90;
@@ -84,6 +85,13 @@ class Camera extends Element {
     suppressFinalBlit = false;
 
     renderOverlays = true;
+
+    private previewCameras: Map<string, {
+        entity: Entity;
+        renderTarget: RenderTarget;
+        workRenderTarget: RenderTarget;
+        targetSize: { width: number, height: number };
+    }> = new Map();
 
     updateCameraUniforms: () => void;
 
@@ -369,6 +377,21 @@ class Camera extends Element {
         this.entity.camera.layers = this.entity.camera.layers.filter(layer => layer !== this.scene.shadowLayer.id);
         this.scene.cameraRoot.removeChild(this.entity);
 
+        this.previewCameras.forEach((preview) => {
+            if (preview.renderTarget) {
+                preview.renderTarget.destroyTextureBuffers();
+                preview.renderTarget.destroy();
+            }
+
+            if (preview.workRenderTarget) {
+                preview.workRenderTarget.destroyTextureBuffers?.();
+                preview.workRenderTarget.destroy();
+            }
+
+            preview.entity.destroy();
+        });
+        this.previewCameras.clear();
+
         // destroy doesn't exist on picker?
         // this.picker.destroy();
         this.picker = null;
@@ -457,6 +480,10 @@ class Camera extends Element {
     }
 
     onUpdate(deltaTime: number) {
+        if (this.previewing) {
+            return;
+        }
+
         // controller update
         this.controller.update(deltaTime);
 
@@ -499,6 +526,97 @@ class Camera extends Element {
             this.far = boundRadius * 2;
             this.near = this.far / (1024 * 16);
         }
+    }
+
+    private setPreviewClippingPlanes(camera: any, cameraPosition: Vec3, forwardVec: Vec3) {
+        const bound = this.scene.bound;
+        const boundRadius = bound.halfExtents.length();
+
+        vec.sub2(bound.center, cameraPosition);
+        const dist = vec.dot(forwardVec);
+
+        if (dist > 0) {
+            camera.farClip = dist + boundRadius;
+            camera.nearClip = Math.max(1e-6, dist < boundRadius ? camera.farClip / (1024 * 16) : dist - boundRadius);
+        } else {
+            camera.farClip = boundRadius * 2;
+            camera.nearClip = camera.farClip / (1024 * 16);
+        }
+    }
+
+    private getPreviewCamera(id: string, width: number, height: number) {
+        const format = this.scene.events.invoke('camera.highPrecision') ? PIXELFORMAT_RGBA16F : PIXELFORMAT_RGBA8;
+        let preview = this.previewCameras.get(id);
+
+        if (!preview) {
+            const entity = new Entity(`PreviewCamera-${id}`);
+            entity.addComponent('camera');
+            entity.enabled = false;
+            this.scene.cameraRoot.addChild(entity);
+
+            preview = {
+                entity,
+                renderTarget: null,
+                workRenderTarget: null,
+                targetSize: { width: 0, height: 0 }
+            };
+
+            this.previewCameras.set(id, preview);
+        }
+
+        const needsResize = !preview.renderTarget ||
+            preview.targetSize.width !== width ||
+            preview.targetSize.height !== height ||
+            preview.renderTarget.colorBuffer.format !== format;
+
+        if (needsResize) {
+            if (preview.renderTarget) {
+                preview.renderTarget.destroyTextureBuffers();
+                preview.renderTarget.destroy();
+            }
+
+            if (preview.workRenderTarget) {
+                preview.workRenderTarget.destroyTextureBuffers?.();
+                preview.workRenderTarget.destroy();
+            }
+
+            const device = this.scene.graphicsDevice;
+            const createTexture = (name: string, texWidth: number, texHeight: number, texFormat: number) => new Texture(device, {
+                name,
+                width: texWidth,
+                height: texHeight,
+                format: texFormat,
+                mipmaps: false,
+                minFilter: FILTER_NEAREST,
+                magFilter: FILTER_NEAREST,
+                addressU: ADDRESS_CLAMP_TO_EDGE,
+                addressV: ADDRESS_CLAMP_TO_EDGE
+            });
+
+            const colorBuffer = createTexture(`previewColor_${id}`, width, height, format);
+            const depthBuffer = createTexture(`previewDepth_${id}`, width, height, PIXELFORMAT_DEPTH);
+            preview.renderTarget = new RenderTarget({
+                colorBuffer,
+                depthBuffer,
+                flipY: false,
+                autoResolve: false
+            });
+
+            const workColorBuffer = createTexture(`previewWork_${id}`, width, height, PIXELFORMAT_RGBA8);
+            preview.workRenderTarget = new RenderTarget({
+                colorBuffer: workColorBuffer,
+                depth: false,
+                autoResolve: false
+            });
+
+            preview.targetSize.width = width;
+            preview.targetSize.height = height;
+        }
+
+        preview.entity.camera.renderTarget = preview.renderTarget;
+        preview.entity.camera.horizontalFov = width > height;
+
+        return preview;
     }
 
     onPreRender() {
@@ -729,6 +847,8 @@ class Camera extends Element {
         focalPoint: Vec3;
         radius: number;
         ortho?: boolean;
+        renderOverlays?: boolean;
+        cameraId?: string;
     }): Promise<boolean> {
         if (!target) {
             return false;
@@ -745,17 +865,13 @@ class Camera extends Element {
         target.width = width;
         target.height = height;
 
-        const { camera } = this.entity;
+        const previewId = options.cameraId ?? 'preview';
+        const previewCamera = this.getPreviewCamera(previewId, width, height);
 
         const restore = {
-            targetSize: this.targetSize,
-            suppressFinalBlit: this.suppressFinalBlit,
             renderOverlays: this.renderOverlays,
             gizmoEnabled: this.scene.gizmoLayer.enabled,
-            projection: camera.projection,
-            orthoHeight: camera.orthoHeight,
-            position: previewPos.copy(this.entity.getLocalPosition()),
-            rotation: previewRot.copy(this.entity.getLocalEulerAngles())
+            enabled: previewCamera.entity.enabled
         };
 
         const renderComplete = new Promise<void>((resolve) => {
@@ -766,32 +882,38 @@ class Camera extends Element {
         });
 
         try {
-            this.startOffscreenMode(width, height);
-            this.renderOverlays = false;
+            this.renderOverlays = options.renderOverlays ?? this.renderOverlays;
             this.scene.gizmoLayer.enabled = false;
 
+            const camera = previewCamera.entity.camera;
+
+            camera.horizontalFov = width > height;
+            camera.toneMapping = this.entity.camera.toneMapping;
+            camera.clearColor.copy(this.entity.camera.clearColor);
+            camera.layers = this.entity.camera.layers.slice();
+            camera.fov = this.fov;
             camera.projection = options.ortho ? PROJECTION_ORTHOGRAPHIC : PROJECTION_PERSPECTIVE;
 
-            // place the camera using a preview-only transform so the main view remains untouched
+            // place the preview camera without touching the main view camera
             calcForwardVec(forwardVec, options.azim, options.elev);
             const distance = Math.max(options.radius / this.sceneRadius, 1e-6) * this.sceneRadius / this.fovFactor;
             vec.copy(forwardVec).mulScalar(distance).add(options.focalPoint);
-            this.entity.setLocalPosition(vec);
-            this.entity.setLocalEulerAngles(options.elev, options.azim, 0);
-            this.fitClippingPlanes(this.entity.getLocalPosition(), this.entity.forward);
+            previewCamera.entity.setLocalPosition(vec);
+            previewCamera.entity.setLocalEulerAngles(options.elev, options.azim, 0);
+            this.setPreviewClippingPlanes(camera, previewCamera.entity.getLocalPosition(), previewCamera.entity.forward);
 
             camera.orthoHeight = options.ortho
                 ? options.radius / this.fovFactor * (camera.horizontalFov ? height / width : 1)
                 : camera.orthoHeight;
 
+            previewCamera.entity.enabled = true;
             this.scene.forceRender = true;
 
             await renderComplete;
 
             const data = new Uint8Array(width * height * 4);
 
-            const { renderTarget } = camera;
-            const { workRenderTarget } = this;
+            const { renderTarget, workRenderTarget } = previewCamera;
 
             this.scene.dataProcessor.copyRt(renderTarget, workRenderTarget);
             await workRenderTarget.colorBuffer.read(0, 0, width, height, { renderTarget: workRenderTarget, data });
@@ -812,17 +934,10 @@ class Camera extends Element {
 
             return true;
         } finally {
-            this.targetSize = restore.targetSize;
-            this.suppressFinalBlit = restore.suppressFinalBlit;
             this.renderOverlays = restore.renderOverlays;
             this.scene.gizmoLayer.enabled = restore.gizmoEnabled;
+            previewCamera.entity.enabled = restore.enabled;
 
-            camera.projection = restore.projection;
-            camera.orthoHeight = restore.orthoHeight;
-            this.entity.setLocalPosition(restore.position);
-            this.entity.setLocalEulerAngles(restore.rotation);
-
-            this.endOffscreenMode();
             this.scene.forceRender = true;
         }
     }
